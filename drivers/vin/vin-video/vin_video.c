@@ -2201,17 +2201,29 @@ static int vidioc_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
 		vin_set_next_buf_addr(cap->vinc);
 		if (vinc->id % 4 == 1 && vin_core_gbl[vinc->id - 1]) {
 			vinc_bind = vin_core_gbl[vinc->id - 1];
-			ret = vin_pipeline_call(vinc_bind, set_stream, &vinc_bind->vid_cap.pipe, vinc_bind->stream_idx);
+			ret = vin_pipeline_call(vinc_bind, set_stream,
+					&vinc_bind->vid_cap.pipe,
+					vinc_bind->stream_idx | VIN_STREAM_SKIP_SENSOR);
 			if (ret < 0)
 				vin_err("video%d %s error!\n", vinc_bind->id, __func__);
 			set_bit(VIN_STREAM, &vinc_bind->vid_cap.state);
 		}
 	}
 
-	ret = vin_pipeline_call(cap->vinc, set_stream, &cap->pipe, cap->vinc->stream_idx);
+	ret = vin_pipeline_call(cap->vinc, set_stream, &cap->pipe,
+			vinc->dma_merge_mode == 1 ?
+			cap->vinc->stream_idx | VIN_STREAM_SKIP_SENSOR :
+			cap->vinc->stream_idx);
 	if (ret < 0)
 		vin_err("video%d %s error!\n", vinc->id, __func__);
 	set_bit(VIN_STREAM, &cap->state);
+	if (vinc->dma_merge_mode == 1) {
+		ret = vin_sensor_set_stream(cap->pipe.sd[VIN_IND_SENSOR], 1);
+		if (ret < 0)
+			vin_err("paired sensor start error!\n");
+		else
+			vin_print("IMX477 paired pipelines armed before sensor start\n");
+	}
 
 	/* set saved exp and gain for reopen, you can call the api in sensor_reg_init */
 	/*
@@ -2280,15 +2292,19 @@ static int vidioc_streamoff(struct file *file, void *priv, enum v4l2_buf_type i)
 
 	mutex_lock(&cap->vdev.entity.graph_obj.mdev->graph_mutex);
 	clear_bit(VIN_STREAM, &cap->state);
-	vin_pipeline_call(vinc, set_stream, &cap->pipe, 0);
+	vin_pipeline_call(vinc, set_stream, &cap->pipe,
+			vinc->dma_merge_mode == 1 ? VIN_STREAM_SKIP_SENSOR : 0);
 	if (vinc->dma_merge_mode == 1) {
 		if (vinc->id % 4 == 1 && vin_core_gbl[vinc->id - 1]) {
 			vinc_bind = vin_core_gbl[vinc->id - 1];
 			clear_bit(VIN_STREAM, &vinc_bind->vid_cap.state);
-			vin_pipeline_call(vinc_bind, set_stream, &vinc_bind->vid_cap.pipe, 0);
+			vin_pipeline_call(vinc_bind, set_stream,
+					&vinc_bind->vid_cap.pipe,
+					VIN_STREAM_SKIP_SENSOR);
 			__csi_isp_setup_link(vinc_bind, 0);
 			__vin_sensor_setup_link(vinc_bind, module, valid_idx, 0);
 		}
+		vin_sensor_set_stream(cap->pipe.sd[VIN_IND_SENSOR], 0);
 	}
 	set_bit(VIN_LPM, &cap->state);
 	__csi_isp_setup_link(vinc, 0);

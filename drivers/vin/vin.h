@@ -318,6 +318,10 @@ struct vin_pipeline_ops {
 	int (*set_stream)(struct vin_pipeline *p, int state);
 };
 
+/* Configure a paired DMA pipeline without starting its shared sensor. */
+#define VIN_STREAM_SKIP_SENSOR 0x100
+int vin_sensor_set_stream(struct v4l2_subdev *sd, int on);
+
 #define vin_pipeline_call(f, op, p, args...)				\
 	(((f)->pipeline_ops && (f)->pipeline_ops->op) ? \
 			    (f)->pipeline_ops->op((p), ##args) : -ENOIOCTLCMD)

@@ -12,6 +12,7 @@ Module.symvers
 .*Module.symvers.*
 *.ko
 *.ko.cmd
+*.nv12
 scripts/imx477/libisp_no3dn.so
 *.elf
 .vscode*

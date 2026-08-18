@@ -1383,6 +1383,12 @@ static int __vin_subdev_set_stream(struct v4l2_subdev *sd, unsigned int idx, int
 	return ret != -ENOIOCTLCMD ? ret : 0;
 }
 
+int vin_sensor_set_stream(struct v4l2_subdev *sd, int on)
+{
+	return __vin_subdev_set_stream(sd, VIN_IND_SENSOR, on);
+}
+EXPORT_SYMBOL_GPL(vin_sensor_set_stream);
+
 static int __vin_pipeline_s_stream(struct vin_pipeline *p, int on_idx)
 {
 	static const u8 seq[5][VIN_IND_MAX] = {
@@ -1404,6 +1410,9 @@ static int __vin_pipeline_s_stream(struct vin_pipeline *p, int on_idx)
 	__maybe_unused struct vin_core *logic_vinc;
 	struct vin_md *vind = NULL;
 	int i, on, ret = 0;
+	bool skip_sensor = on_idx & VIN_STREAM_SKIP_SENSOR;
+
+	on_idx &= ~VIN_STREAM_SKIP_SENSOR;
 
 	if (p == NULL) {
 		vin_err("pipeline is NULL, cannot s_stream\n");
@@ -1483,6 +1492,8 @@ static int __vin_pipeline_s_stream(struct vin_pipeline *p, int on_idx)
 		vin_bridge_ch_en(vinc, on);
 	for (i = 0; i < VIN_IND_ACTUATOR; i++) {
 		unsigned int idx = seq[on_idx][i];
+		if (skip_sensor && idx == VIN_IND_SENSOR)
+			continue;
 		if (!p->sd[idx] || !p->sd[idx]->entity.graph_obj.mdev)
 			continue;
 		if (vinc->ptn_cfg.ptn_en && (idx <= VIN_IND_MIPI))
@@ -1503,6 +1514,8 @@ static int __vin_pipeline_s_stream(struct vin_pipeline *p, int on_idx)
 error:
 	for (; i >= 0; i--) {
 		unsigned int idx = seq[on_idx][i];
+		if (skip_sensor && idx == VIN_IND_SENSOR)
+			continue;
 		if (!p->sd[idx] || !p->sd[idx]->entity.graph_obj.mdev)
 			continue;
 		if (vinc->ptn_cfg.ptn_en && (idx <= VIN_IND_MIPI))

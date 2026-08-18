@@ -30,6 +30,8 @@ the image is dark, magenta, and vertically banded.
   the centered crop before transmitting CSI-2 data.
 - Discrete V4L2 frame-size enumeration for both sensor modes.
 - Paired ISP/TDM large-image capture for the 3840-pixel-wide mode.
+- Paired DMA/ISP pipelines are armed before their shared sensor is started,
+  keeping the two halves synchronized during UHD capture.
 - Per-register sensor-table writes with error reporting and short pacing for
   the A733 TWI controller.
 - A VIN workaround that prevents AWISP's 2-in-1 DMA merge request from making
@@ -60,8 +62,8 @@ the image is dark, magenta, and vertically banded.
   `libAWIspApi-isp-602-arm64` package only contains IMX214, IMX219, and IMX415
   profiles. An ISP602 IMX477 profile is still required for correct exposure,
   white balance, black level, color, and lens-shading correction.
-- The fallback OV13850 profile enables strong ISP temporal denoising, which
-  produces faded copies of moving objects. Prefix capture commands with
+- The fallback OV13850 profile enables strong ISP temporal denoising. Prefix
+  motion-sensitive capture commands with
   `LD_PRELOAD=/usr/local/lib/libisp_no3dn.so` to bypass the ISP602 D3D stage.
 - The DMA-merge workaround is intentionally limited to 1920x1080 and should be
   generalized once the AWISP configuration path is understood.
@@ -125,6 +127,44 @@ gst-launch-1.0 -e \
 
 Each complete UHD NV12 image is 12,441,600 bytes.
 
+### Record and encode a short UHD video
+
+Record 60 uncompressed NV12 frames (nominally two seconds at 30 fps) on the
+Cubie A7S. The resulting file is 746,496,000 bytes:
+
+```sh
+LD_PRELOAD=/usr/local/lib/libisp_no3dn.so gst-launch-1.0 -e \
+  v4l2src device=/dev/video1 io-mode=2 num-buffers=60 \
+  ! 'video/x-raw,format=NV12,width=3840,height=2160,framerate=30/1' \
+  ! filesink location=imx477-4k-60frames.nv12
+```
+
+Copy the recording to a faster machine for encoding:
+
+```sh
+scp radxa@192.168.0.41:/home/radxa/imx477-build/imx477-4k-60frames.nv12 .
+```
+
+Encode the raw frames as an H.264 MP4 on that machine:
+
+```sh
+ffmpeg \
+  -f rawvideo \
+  -pixel_format nv12 \
+  -video_size 3840x2160 \
+  -framerate 30 \
+  -i imx477-4k-60frames.nv12 \
+  -c:v libx264 \
+  -preset medium \
+  -crf 18 \
+  -pix_fmt yuv420p \
+  -movflags +faststart \
+  imx477-4k-test.mp4
+```
+
+The raw file contains no header, so the pixel format, dimensions, and frame
+rate must be supplied explicitly when decoding it.
+
 For motion tests and streaming, bypass the fallback profile's temporal filter:
 
 ```sh
@@ -143,7 +183,7 @@ The tested snapshot used these module hashes:
 
 ```text
 b75284693ebd905851adb8ad87f03fdcce52b0cc0232b60e52e35888c3a09277  imx477_mipi.ko
-57de17d1422b1472f29dde27ce79212960743b0e9888adca81ba063245614d9a  vin_v4l2.ko
+8fd7f7afdc7481ba34103f407b97286c94818bfa99b2d070034aec04c5848d03  vin_v4l2.ko
 ```
 
 The modules are not committed because they are kernel-version-specific and can
