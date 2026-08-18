@@ -3,9 +3,9 @@
 This repository is a bring-up snapshot for an Arducam B0242 / Sony IMX477
 camera on the Radxa Cubie A7S (Allwinner A733).
 
-The current driver produces coherent 1920x1080 and 4032x3040 NV12 frames from
-four-lane RAW10 sensor streams. The near-full-frame mode crops 12 sensor pixels
-from each horizontal edge so each half is aligned to 2016 pixels. Capture uses
+The current driver produces coherent 1920x1080 and 3840x2160 NV12 frames from
+four-lane RAW10 sensor streams. The UHD mode uses a centered sensor-side crop
+of 108 pixels per horizontal edge and 440 per vertical edge. Capture uses
 the A733's paired TDM/ISP large-image path. This is not yet a production-quality
 camera stack:
 the closed Allwinner ISP602 userspace library has no IMX477 tuning profile, so
@@ -17,7 +17,7 @@ the image is dark, magenta, and vertically banded.
 - Camera: Arducam B0242 / Sony IMX477
 - Kernel: `5.15.147-21-a733`
 - Sensor mode: 1920x1080, RAW10, four CSI-2 lanes, nominal 60 fps
-- Capture output: 1920x1080 NV12 on `/dev/video0`; 4032x3040 NV12 on
+- Capture output: 1920x1080 NV12 on `/dev/video0`; 3840x2160 NV12 on
   `/dev/video1`
 - Upstream BSP base: `radxa/allwinner-bsp` commit
   `c8fb29d68c58ae557e8fb96ae829ca2693936a75`
@@ -26,10 +26,10 @@ the image is dark, magenta, and vertically banded.
 
 - IMX477 chip-ID validation.
 - 1920x1080 RAW10 four-lane sensor mode.
-- 4032x3040 RAW10 four-lane sensor mode, nominal 30 fps. The sensor still emits
-  4056x3040; the CSI parser crops 12 pixels from each horizontal edge.
+- 3840x2160 RAW10 four-lane sensor mode, nominal 30 fps. The sensor performs
+  the centered crop before transmitting CSI-2 data.
 - Discrete V4L2 frame-size enumeration for both sensor modes.
-- Paired ISP/TDM large-image capture for the 4032-pixel-wide mode.
+- Paired ISP/TDM large-image capture for the 3840-pixel-wide mode.
 - Per-register sensor-table writes with error reporting and short pacing for
   the A733 TWI controller.
 - A VIN workaround that prevents AWISP's 2-in-1 DMA merge request from making
@@ -47,9 +47,10 @@ the image is dark, magenta, and vertically banded.
 - Consecutive captures can alternate between about 60 fps and about 30 fps.
   AWISP still announces `STITCH_2IN1_LINNER`; a 30 fps capture is the reliable
   fallback.
-- A 180-frame end-to-end sink test completes in about 6.3 seconds, or roughly
-  28.6 fps, through the paired merge path.
-- Do not switch directly between the 1920x1080 and 4032x3040 paths. Opening
+- A 180-frame end-to-end sink test completes in about 6.2 seconds, or roughly
+  29 fps, through the paired merge path. A 30-frame raw capture has no missing
+  pixels in either 1920-pixel half.
+- Do not switch directly between the 1920x1080 and 3840x2160 paths. Opening
   `/dev/video1` after a `/dev/video0` capture can hard-lock the current VIN
   stack. Reboot before changing modes; clean-boot full-frame capture is
   repeatable.
@@ -103,10 +104,10 @@ gst-launch-1.0 -e \
 
 Each complete NV12 frame is 3,110,400 bytes.
 
-Capture one full-frame NV12 image through the paired large-image node:
+Capture one UHD NV12 image through the paired large-image node:
 
 ```sh
-./scripts/imx477/test-full-frame.sh imx477-4032x3040.nv12
+./scripts/imx477/test-full-frame.sh imx477-3840x2160.nv12
 ```
 
 The equivalent pipeline is:
@@ -114,18 +115,18 @@ The equivalent pipeline is:
 ```sh
 gst-launch-1.0 -e \
   v4l2src device=/dev/video1 io-mode=2 num-buffers=1 \
-  ! 'video/x-raw,format=NV12,width=4032,height=3040,framerate=30/1' \
-  ! filesink location=imx477-4032x3040.nv12
+  ! 'video/x-raw,format=NV12,width=3840,height=2160,framerate=30/1' \
+  ! filesink location=imx477-3840x2160.nv12
 ```
 
-Each complete near-full-frame NV12 image is 18,385,920 bytes.
+Each complete UHD NV12 image is 12,441,600 bytes.
 
 ## Installed reference hashes
 
 The tested snapshot used these module hashes:
 
 ```text
-33550bd7afcc65e6223b462f76cdb4866350203e481088f9fe4592ad5edd9bcb  imx477_mipi.ko
+b75284693ebd905851adb8ad87f03fdcce52b0cc0232b60e52e35888c3a09277  imx477_mipi.ko
 57de17d1422b1472f29dde27ce79212960743b0e9888adca81ba063245614d9a  vin_v4l2.ko
 ```
 
