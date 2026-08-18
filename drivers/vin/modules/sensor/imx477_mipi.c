@@ -1339,14 +1339,35 @@ static int sensor_reset(struct v4l2_subdev *sd, u32 val)
 
 static int sensor_detect(struct v4l2_subdev *sd)
 {
-	data_type rdval = 0;
+	data_type id_msb = 0;
+	data_type id_lsb = 0;
+	unsigned int chip_id;
+	int ret;
 
-	sensor_read(sd, 0x0000, &rdval);
-	sensor_print("%s read value is 0x%x\n", __func__, rdval);
-	sensor_read(sd, 0x0001, &rdval);
-	sensor_print("%s read value is 0x%x\n", __func__, rdval);
-	sensor_read(sd, 0x0016, &rdval);
-	sensor_print("%s read value is 0x%x\n", __func__, rdval);
+	ret = sensor_read(sd, 0x0016, &id_msb);
+	if (ret < 0) {
+		sensor_err("%s: failed to read chip ID MSB: %d\n",
+			   __func__, ret);
+		return ret;
+	}
+
+	ret = sensor_read(sd, 0x0017, &id_lsb);
+	if (ret < 0) {
+		sensor_err("%s: failed to read chip ID LSB: %d\n",
+			   __func__, ret);
+		return ret;
+	}
+
+	chip_id = ((unsigned int)id_msb << 8) | id_lsb;
+
+	sensor_print("%s: chip ID 0x%04x\n", __func__, chip_id);
+
+	if (chip_id != V4L2_IDENT_SENSOR) {
+		sensor_err("%s: chip ID mismatch, expected 0x%04x, got 0x%04x\n",
+			   __func__, V4L2_IDENT_SENSOR, chip_id);
+		return -ENODEV;
+	}
+
 	return 0;
 }
 
