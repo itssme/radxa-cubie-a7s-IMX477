@@ -3,11 +3,11 @@
 This repository is a bring-up snapshot for an Arducam B0242 / Sony IMX477
 camera on the Radxa Cubie A7S (Allwinner A733).
 
-The current driver produces coherent 1920x1080 NV12 frames from a four-lane
-RAW10 sensor stream. It has completed 300-frame captures without TDM, ISP,
-parser, or I2C errors. This is not yet a production-quality camera stack: the
-closed Allwinner ISP602 userspace library has no IMX477 tuning profile, so the
-image is dark, magenta, and vertically banded.
+The current driver produces coherent 1920x1080 and 4056x3040 NV12 frames from
+four-lane RAW10 sensor streams. Full-frame capture uses the A733's paired
+TDM/ISP large-image path. This is not yet a production-quality camera stack:
+the closed Allwinner ISP602 userspace library has no IMX477 tuning profile, so
+the image is dark, magenta, and vertically banded.
 
 ## Tested platform
 
@@ -15,7 +15,8 @@ image is dark, magenta, and vertically banded.
 - Camera: Arducam B0242 / Sony IMX477
 - Kernel: `5.15.147-21-a733`
 - Sensor mode: 1920x1080, RAW10, four CSI-2 lanes, nominal 60 fps
-- Capture output: 1920x1080 NV12 on `/dev/video0`
+- Capture output: 1920x1080 NV12 on `/dev/video0`; 4056x3040 NV12 on
+  `/dev/video1`
 - Upstream BSP base: `radxa/allwinner-bsp` commit
   `c8fb29d68c58ae557e8fb96ae829ca2693936a75`
 
@@ -23,11 +24,17 @@ image is dark, magenta, and vertically banded.
 
 - IMX477 chip-ID validation.
 - 1920x1080 RAW10 four-lane sensor mode.
+- 4056x3040 RAW10 four-lane sensor mode, nominal 30 fps.
+- Discrete V4L2 frame-size enumeration for both sensor modes.
+- Paired ISP/TDM large-image capture for the 4056-pixel-wide mode.
 - Per-register sensor-table writes with error reporting and short pacing for
   the A733 TWI controller.
 - A VIN workaround that prevents AWISP's 2-in-1 DMA merge request from making
   TDM program half-width 1128x1080 buffers for a 1920x1080 linear stream.
 - Runtime TDM configuration logging for bring-up diagnostics.
+- Large-image sensor exposure/gain updates are temporarily frozen. The two
+  ISP instances otherwise issue updates to the same sensor and trigger A733
+  TWI failures during full-frame streaming.
 - Device-tree overlay: `dts/cubie-a7a-arducam-imx477.dts`.
 
 ## Known limitations
@@ -37,6 +44,16 @@ image is dark, magenta, and vertically banded.
 - Consecutive captures can alternate between about 60 fps and about 30 fps.
   AWISP still announces `STITCH_2IN1_LINNER`; a 30 fps capture is the reliable
   fallback.
+- The 4056x3040 sensor stream is timed at 30 fps, but quiet end-to-end tests
+  currently deliver about 25 fps through the paired merge path. Both scaler
+  halves report `vertical short` once per input frame; this is the next
+  throughput issue to investigate.
+- Do not switch directly between the 1920x1080 and 4056x3040 paths. Opening
+  `/dev/video1` after a `/dev/video0` capture can hard-lock the current VIN
+  stack. Reboot before changing modes; clean-boot full-frame capture is
+  repeatable.
+- Automatic exposure/gain is disabled only for large-image mode pending
+  synchronized sensor control. The mode-table values remain active.
 - ISP output is not calibrated. The installed
   `libAWIspApi-isp-602-arm64` package only contains IMX214, IMX219, and IMX415
   profiles. An ISP602 IMX477 profile is still required for correct exposure,
@@ -85,13 +102,30 @@ gst-launch-1.0 -e \
 
 Each complete NV12 frame is 3,110,400 bytes.
 
+Capture one full-frame NV12 image through the paired large-image node:
+
+```sh
+./scripts/imx477/test-full-frame.sh imx477-4056x3040.nv12
+```
+
+The equivalent pipeline is:
+
+```sh
+gst-launch-1.0 -e \
+  v4l2src device=/dev/video1 io-mode=2 num-buffers=1 \
+  ! 'video/x-raw,format=NV12,width=4056,height=3040,framerate=30/1' \
+  ! filesink location=imx477-4056x3040.nv12
+```
+
+Each complete full-frame NV12 image is 18,495,360 bytes.
+
 ## Installed reference hashes
 
 The tested snapshot used these module hashes:
 
 ```text
-bb748881fb09d2a3f3f1904dd2d2beaf71f947ecec0ffa91292f8e7a538578f5  imx477_mipi.ko
-6f246cdcedea6235f520031718706de837042694c015f5fa178fdc17838e34c2  vin_v4l2.ko
+2bbc067376958d581e4366468107347b168215cff9d160a88c647926c025579e  imx477_mipi.ko
+57de17d1422b1472f29dde27ce79212960743b0e9888adca81ba063245614d9a  vin_v4l2.ko
 ```
 
 The modules are not committed because they are kernel-version-specific and can

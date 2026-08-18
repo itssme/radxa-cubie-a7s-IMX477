@@ -1270,6 +1270,15 @@ void isp_sensor_set_exp_gain(struct isp_dev *isp, void *data)
 	unsigned int *result = data;
 	int i;
 
+	/*
+	 * In 2-in-1 large-image mode ISP1 is the controlling half: userspace
+	 * supplies its load image and the driver mirrors it to ISP0.  Letting
+	 * both ISP instances update the shared sensor races the grouped I2C
+	 * register writes and can corrupt exposure/VTS programming.
+	 */
+	if (isp->large_image == 3 && isp->id == 0)
+		return;
+
 	exp_gain.exp_val = result[1];
 	exp_gain.exp_mid_val = result[2];
 	exp_gain.gain_val = result[3];

@@ -231,9 +231,8 @@ static struct regval_list sensor_default_regs[] = {
 
 };
 
-/*
 static struct regval_list sensor_full_regs[] = {
-/* 4056x3040 30fps 10b
+	/* 4056x3040 30fps 10b */
 	{0x0100, 0x00},
 	{REG_DLY, 0x20},
 
@@ -353,7 +352,6 @@ static struct regval_list sensor_full_regs[] = {
 
 	{0x0100, 0x01},
 };
-*/
 
 static struct regval_list sensor_12bfull_regs[] = {
 /* 4056x3040 30fps 12b */
@@ -1196,6 +1194,15 @@ static int sensor_s_exp_gain(struct v4l2_subdev *sd,
 	struct sensor_info *info = to_state(sd);
 	int exp_val, gain_val;
 
+	/*
+	 * The A733 large-image path runs two ISP instances.  Dynamic sensor
+	 * control from that path currently collides with full-rate capture on
+	 * the camera I2C bus, so retain the mode-table exposure and gain until
+	 * large-image control is synchronized in the VIN/ISP stack.
+	 */
+	if (info->large_image == 3)
+		return 0;
+
 	exp_val = exp_gain->exp_val;
 	gain_val = exp_gain->gain_val;
 
@@ -1461,6 +1468,25 @@ static struct sensor_win_size sensor_win_sizes[] = {
 	 .gain_max = 352 << 4,
 	 .regs = sensor_1080p60fps_regs,
 	 .regs_size = ARRAY_SIZE(sensor_1080p60fps_regs),
+	 .set_size = NULL,
+	},
+	{
+	 .width = 4056,
+	 .height = 3040,
+	 .hoffset = 0,
+	 .voffset = 0,
+	 .hts = 7700,
+	 .vts = 3640,
+	 .pclk = 840 * 1000 * 1000,
+	 .mipi_bps = 1200 * 1000 * 1000,
+	 .fps_fixed = 30,
+	 .bin_factor = 1,
+	 .intg_min = 1 << 4,
+	 .intg_max = (3640 - 4) << 4,
+	 .gain_min = 1 << 4,
+	 .gain_max = 352 << 4,
+	 .regs = sensor_full_regs,
+	 .regs_size = ARRAY_SIZE(sensor_full_regs),
 	 .set_size = NULL,
 	},
 };

@@ -743,13 +743,15 @@ static int vidioc_enum_framesizes(struct file *file, void *fh,
 	if (ret < 0)
 		return -1;
 
-	fsize->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
-	fsize->stepwise.min_width = MIN_IN_WIDTH;
-	fsize->stepwise.min_height = MIN_IN_HEIGHT;
-	fsize->stepwise.step_width = 2;
-	fsize->stepwise.max_width = fse.max_width;
-	fsize->stepwise.max_height = fse.max_height;
-	fsize->stepwise.step_height = 2;
+	/*
+	 * The sensor pad enumerates one entry per native sensor mode.  Reporting
+	 * each entry as a continuous range makes userspace treat entry zero as
+	 * the device-wide maximum and hide all larger modes.  Preserve the
+	 * sensor's discrete-mode semantics at the video node.
+	 */
+	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fsize->discrete.width = fse.max_width;
+	fsize->discrete.height = fse.max_height;
 
 	return 0;
 }
