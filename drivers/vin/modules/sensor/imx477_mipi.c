@@ -38,7 +38,7 @@ MODULE_LICENSE("GPL");
  * Our nominal (default) frame rate.
  */
 
-#define SENSOR_FRAME_RATE 30
+#define SENSOR_FRAME_RATE 60
 
 /*
  * The IMX477 i2c address
@@ -731,26 +731,23 @@ static struct regval_list sensor_1080p30fps_regs[] = {
 };
 */
 
-/*
 static struct regval_list sensor_1080p60fps_regs[] = {
-	/* 2028x1128 60fps 10b
-	{0x0100, 0x00},
-	{REG_DLY, 0x20},
+
 	{0x0112, 0x0A},
 	{0x0113, 0x0A},
 	{0x0114, 0x03},
-	{0x0342, 0x0F},
-	{0x0343, 0xA4},
-	{0x0340, 0x06},/* 1B   change for 60fps
-	{0x0341, 0xD6},/* 58   change for 60fps
+	{0x0342, 0x0C},
+	{0x0343, 0x04},
+	{0x0340, 0x11},
+	{0x0341, 0xC6},
 	{0x0344, 0x00},
 	{0x0345, 0x00},
 	{0x0346, 0x01},
-	{0x0347, 0x88},
+	{0x0347, 0xB8},
 	{0x0348, 0x0F},
 	{0x0349, 0xD7},
 	{0x034A, 0x0A},
-	{0x034B, 0x57},
+	{0x034B, 0x27},
 	{0x00E3, 0x00},
 	{0x00E4, 0x00},
 	{0x00FC, 0x0A},
@@ -798,17 +795,17 @@ static struct regval_list sensor_1080p60fps_regs[] = {
 	{0x0404, 0x00},
 	{0x0405, 0x10},
 	{0x0408, 0x00},
-	{0x0409, 0x00},
+	{0x0409, 0x36},
 	{0x040A, 0x00},
 	{0x040B, 0x00},
 	{0x040C, 0x07},
-	{0x040D, 0xEC},
+	{0x040D, 0x80},
 	{0x040E, 0x04},
-	{0x040F, 0x68},
+	{0x040F, 0x38},
 	{0x034C, 0x07},
-	{0x034D, 0xEC},
+	{0x034D, 0x80},
 	{0x034E, 0x04},
-	{0x034F, 0x68},
+	{0x034F, 0x38},
 	{0x0301, 0x05},
 	{0x0303, 0x02},
 	{0x0305, 0x02},
@@ -816,43 +813,42 @@ static struct regval_list sensor_1080p60fps_regs[] = {
 	{0x0307, 0xAF},
 	{0x0309, 0x0A},
 	{0x030B, 0x01},
-	{0x030D, 0x04},
+	{0x030D, 0x02},
 	{0x030E, 0x00},
-	{0x030F, 0xC8},
+	{0x030F, 0x7D},
 	{0x0310, 0x01},
-	{0x0820, 0x12},
-	{0x0821, 0xC0},
+	{0x0820, 0x17},
+	{0x0821, 0x70},
 	{0x0822, 0x00},
 	{0x0823, 0x00},
 	{0x080A, 0x00},
-	{0x080B, 0x87},
+	{0x080B, 0x97},
 	{0x080C, 0x00},
-	{0x080D, 0x10},
+	{0x080D, 0x5F},
 	{0x080E, 0x00},
-	{0x080F, 0x87},
+	{0x080F, 0x9F},
 	{0x0810, 0x00},
-	{0x0811, 0x5F},
+	{0x0811, 0x6F},
 	{0x0812, 0x00},
-	{0x0813, 0x5F},
+	{0x0813, 0x6F},
 	{0x0814, 0x00},
-	{0x0815, 0x10},
+	{0x0815, 0x57},
 	{0x0816, 0x01},
-	{0x0817, 0x3F},
+	{0x0817, 0x87},
 	{0x0818, 0x00},
-	{0x0819, 0x3F},
+	{0x0819, 0x4F},
 	{0xE04C, 0x00},
-	{0xE04D, 0x87},
+	{0xE04D, 0x9F},
 	{0xE04E, 0x00},
 	{0xE04F, 0x1F},
 	{0x3E20, 0x01},
 	{0x3E37, 0x00},
 	{0x3F50, 0x00},
 	{0x3F56, 0x00},
-	{0x3F57, 0x73},
-	{0x0100, 0x01},
-
+	{0x3F57, 0x58},
+	{0X3FF9, 0x01},
+	{REG_DLY, 1},
 };
-*/
 
 /*
 static struct regval_list sensor_720p120fps_regs[] = {
@@ -1387,14 +1383,14 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
 
 	info->focus_status = 0;
 	info->low_speed = 0;
-	info->width = 4056;
-	info->height = 3040;
+	info->width = 1920;
+	info->height = 1080;
 	info->hflip = 0;
 	info->vflip = 0;
 	info->gain = 0;
 
 	info->tpf.numerator = 1;
-	info->tpf.denominator = 30;	/* 30fps */
+	info->tpf.denominator = 60;	/* 60fps */
 
 	return 0;
 }
@@ -1449,155 +1445,25 @@ static struct sensor_format_struct sensor_formats[] = {
  */
 
 static struct sensor_win_size sensor_win_sizes[] = {
-	{  /* 4000*3000 15fps */
-	 .width = 3840,/* 4000, */
-	 .height = 2160,/* 3000, */
-	 .hoffset = 24,
-	 .voffset = 20,
-	 .hts = 7700,
-	 .vts = 3640,
-	 .pclk = 600 * 1000 * 1000,
-	 .mipi_bps = 1200 * 1000 * 1000,
-	 .fps_fixed = 30,
-	 .bin_factor = 1,
-	 .intg_min = 1 << 4,
-	 .intg_max = (3640 - 20) << 4,
-	 .gain_min = 1 << 4,
-	 .gain_max = 22 << 4,
-	 .regs = sensor_12bfull_regs,
-	 .regs_size = ARRAY_SIZE(sensor_12bfull_regs),
-	 .set_size = NULL,
-	 },
-
-/*
-	{  /* 4000*3000 15fps
-	 .width = 4000,
-	 .height = 3000,
-	 .hoffset = 24,
-	 .voffset = 20,
-	 .hts = 7700,
-	 .vts = 3640,
-	 .pclk = 600 * 1000 * 1000,
-	 .mipi_bps = 1200 * 1000 * 1000,
-	 .fps_fixed = 30,
-	 .bin_factor = 1,
-	 .intg_min = 1 << 4,
-	 .intg_max = (3640 - 20) << 4,
-	 .gain_min = 1 << 4,
-	 .gain_max = 22 << 4,
-	 .regs = sensor_12bfull_regs,
-	 .regs_size = ARRAY_SIZE(sensor_12bfull_regs),
-	 .set_size = NULL,
-	 },
-*/
-   /*
-	{  /* 4000*3000 15fps
-	 .width = 4000,
-	 .height = 3000,
-	 .hoffset = 24,
-	 .voffset = 20,
-	 .hts = 7700,
-	 .vts = 3640,
-	 .pclk = 420 * 1000 * 1000,
-	 .mipi_bps = 420 * 1000 * 1000,
-	 .fps_fixed = 30,
-	 .bin_factor = 1,
-	 .intg_min = 1 << 4,
-	 .intg_max = (3640 - 20) << 4,
-	 .gain_min = 1 << 4,
-	 .gain_max = 22 << 4,
-	 .regs = sensor_full_regs,
-	 .regs_size = ARRAY_SIZE(sensor_full_regs),
-	 .set_size = NULL,
-	 },
-	*/
-
-	/*
-	{   /* 4k 15fps
-	 .width = 3840,/* 4032
-	 .height = 2160,/* 2268
-	 .hoffset = 104,/* 8
-	 .voffset = 64,/* 10
-	 .hts = 7700,
-	 .vts = 3640,
-	 .pclk = 420 * 1000 * 1000,
-	 .mipi_bps = 840 * 1000 * 1000,
-	 .fps_fixed = 30,
-	 .bin_factor = 1,
-	 .intg_min = 1 << 4,
-	 .intg_max = (3640 - 20) << 4,
-	 .gain_min = 1 << 4,
-	 .gain_max = 352 << 4,
-	 .regs = sensor_4k_regs,
-	 .regs_size = ARRAY_SIZE(sensor_4k_regs),
-	 .set_size = NULL,
-	 },
-	*/
-	/*
-	{   /* 30fps
+	{
 	 .width = 1920,
 	 .height = 1080,
-	 .hoffset = 54,
-	 .voffset = 24,
-	 .hts = 4004,
-	 .vts = 3500,
-	 .pclk = 420 * 1000 * 1000,
-	 .mipi_bps = 840 * 1000 * 1000,
-	 .fps_fixed = 30,
+	 .hoffset = 0,
+	 .voffset = 0,
+	 .hts = 3076,
+	 .vts = 4550,
+	 .pclk = 840 * 1000 * 1000,
+	 .mipi_bps = 1500 * 1000 * 1000,
+	 .fps_fixed = 60,
 	 .bin_factor = 1,
 	 .intg_min = 1 << 4,
-	 .intg_max = (3500 - 20) << 4,
+	 .intg_max = (4550 - 4) << 4,
 	 .gain_min = 1 << 4,
 	 .gain_max = 352 << 4,
-	 .regs = sensor_1080p30fps_regs,
-	 .regs_size = ARRAY_SIZE(sensor_1080p30fps_regs),
+	 .regs = sensor_1080p60fps_regs,
+	 .regs_size = ARRAY_SIZE(sensor_1080p60fps_regs),
 	 .set_size = NULL,
-	 },
-	*/
-
-	/*
-	{   /* 60fps
-		  .width = 1920,
-		  .height = 1080,
-		  .hoffset = 54,
-		  .voffset = 24,
-		  .hts = 4004,
-		  .vts = 1750,
-		  .pclk = 420 * 1000 * 1000,
-		  .mipi_bps = 840 * 1000 * 1000,
-		  .fps_fixed = 30,
-		  .bin_factor = 1,
-		  .intg_min = 1 << 4,
-		  .intg_max = (1750 - 20) << 4,
-		  .gain_min = 1 << 4,
-		  .gain_max = 352 << 4,
-		  .regs = sensor_1080p60fps_regs,
-		  .regs_size = ARRAY_SIZE(sensor_1080p60fps_regs),
-		  .set_size = NULL,
 	},
-	 */
-
-	/*
-	{  /* 720p120fps
-	 .width = 1280,
-	 .height = 720,
-	 .hoffset = 34,
-	 .voffset = 15,
-	 .hts = 4004,
-	 .vts = 875,
-	 .pclk = 420 * 1000 * 1000,
-	 .mipi_bps = 840 * 1000 * 1000,
-	 .fps_fixed = 30,
-	 .bin_factor = 1,
-	 .intg_min = 1 << 4,
-	 .intg_max = (875 - 20) << 4,
-	 .gain_min = 1 << 4,
-	 .gain_max = 352 << 4,
-	 .regs = sensor_720p120fps_regs,
-	 .regs_size = ARRAY_SIZE(sensor_720p120fps_regs),
-	 .set_size = NULL,
-	 },
-	 */
 };
 
 #define N_WIN_SIZES (ARRAY_SIZE(sensor_win_sizes))
@@ -1683,20 +1549,32 @@ static int sensor_reg_init(struct sensor_info *info)
 static int sensor_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct sensor_info *info = to_state(sd);
+	int ret;
 
 	sensor_print("%s on = %d, %d*%d %x\n", __func__, enable,
 		     info->current_wins->width,
 		     info->current_wins->height, info->fmt->mbus_code);
+
 	if (!enable) {
+		ret = sensor_write(sd, 0x0100, 0x00);
 		vin_gpio_set_status(sd, SM_HS, 0);
 		vin_gpio_set_status(sd, SM_VS, 0);
-			return 0;
-	} else {
-		vin_gpio_set_status(sd, SM_VS, 3);
-		vin_gpio_set_status(sd, SM_HS, 3);
+		return ret;
 	}
 
-	return sensor_reg_init(info);
+	vin_gpio_set_status(sd, SM_VS, 3);
+	vin_gpio_set_status(sd, SM_HS, 3);
+
+	ret = sensor_reg_init(info);
+	if (ret < 0)
+		return ret;
+
+	ret = sensor_write(sd, 0x0100, 0x01);
+	if (ret < 0)
+		return ret;
+
+	usleep_range(3000, 4000);
+	return 0;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1811,6 +1689,8 @@ static int sensor_probe(struct i2c_client *client,
 	info->sensor_field = V4L2_FIELD_NONE;
 	info->stream_seq = MIPI_BEFORE_SENSOR;
 	info->combo_mode = CMB_TERMINAL_RES | CMB_PHYA_OFFSET2 | MIPI_NORMAL_MODE;
+	info->time_hs = 0x20;
+	info->deskew = 0x02;
 	info->af_first_flag = 1;
 	info->exp = 0;
 	info->gain = 0;
