@@ -60,6 +60,9 @@ the image is dark, magenta, and vertically banded.
   `libAWIspApi-isp-602-arm64` package only contains IMX214, IMX219, and IMX415
   profiles. An ISP602 IMX477 profile is still required for correct exposure,
   white balance, black level, color, and lens-shading correction.
+- The fallback OV13850 profile enables strong ISP temporal denoising, which
+  produces faded copies of moving objects. Prefix capture commands with
+  `LD_PRELOAD=/usr/local/lib/libisp_no3dn.so` to bypass the ISP602 D3D stage.
 - The DMA-merge workaround is intentionally limited to 1920x1080 and should be
   generalized once the AWISP configuration path is understood.
 
@@ -76,6 +79,7 @@ The build uses the running kernel headers and produces:
 ```text
 drivers/vin/modules/sensor/imx477_mipi.ko
 drivers/vin/vin_v4l2.ko
+scripts/imx477/libisp_no3dn.so
 ```
 
 Install with backups, then reboot:
@@ -120,6 +124,18 @@ gst-launch-1.0 -e \
 ```
 
 Each complete UHD NV12 image is 12,441,600 bytes.
+
+For motion tests and streaming, bypass the fallback profile's temporal filter:
+
+```sh
+LD_PRELOAD=/usr/local/lib/libisp_no3dn.so gst-launch-1.0 -e \
+  v4l2src device=/dev/video1 io-mode=2 num-buffers=1 \
+  ! 'video/x-raw,format=NV12,width=3840,height=2160,framerate=30/1' \
+  ! fakesink sync=false
+```
+
+The preload hook only changes the ISP602 D3D bypass bit. It does not alter the
+sensor mode, frame geometry, exposure, or spatial denoising.
 
 ## Installed reference hashes
 
