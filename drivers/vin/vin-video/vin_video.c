@@ -2566,8 +2566,15 @@ static int __vin_s_parm(struct vin_core *vinc, struct v4l2_streamparm *parms)
 		parms->parm.capture.capturemode = V4L2_MODE_PREVIEW;
 	}
 
-	if (vinc->dma_merge_mode == 1)
+	if (vinc->dma_merge_mode == 1 && cap->frame.o_width == 1920 &&
+	    cap->frame.o_height == 1080) {
+		vin_print("IMX477-DMA-MERGE-BYPASS video%u refusing 2-in-1 stitch for %ux%u\n",
+			  vinc->id, cap->frame.o_width, cap->frame.o_height);
+		vinc->dma_merge_mode = 0;
+		parms->parm.capture.reserved[2] = 0;
+	} else if (vinc->dma_merge_mode == 1) {
 		parms->parm.capture.reserved[2] = 3;
+	}
 
 	if ((vinc->csi_ch != 0xff) && (vinc->csi_ch & 0x20))
 		sunxi_csi_set_ch_mode(cap->pipe.sd[VIN_IND_CSI]);

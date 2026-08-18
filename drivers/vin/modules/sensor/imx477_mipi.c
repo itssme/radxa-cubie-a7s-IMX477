@@ -1281,7 +1281,6 @@ static int sensor_power(struct v4l2_subdev *sd, int on)
 		vin_set_pmu_channel(sd, AVDD, ON);
 		vin_set_pmu_channel(sd, DVDD, ON);
 
-
 		usleep_range(10000, 12000);
 		vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
 		vin_gpio_write(sd, PWDN, CSI_GPIO_HIGH);
@@ -1507,6 +1506,37 @@ static int sensor_s_ctrl(struct v4l2_ctrl *ctrl)
 	return -EINVAL;
 }
 
+static int imx477_write_array_debug(struct v4l2_subdev *sd,
+				    struct regval_list *regs,
+				    int array_size,
+				    const char *name)
+{
+	int i;
+	int ret;
+
+	for (i = 0; i < array_size; i++) {
+		if (regs[i].addr == REG_DLY) {
+			usleep_range(regs[i].data * 1000,
+				     regs[i].data * 1000 + 100);
+			continue;
+		}
+
+		ret = sensor_write(sd, regs[i].addr, regs[i].data);
+		if (ret < 0) {
+			sensor_err("%s failed at index %d/%d: reg=0x%04x val=0x%02x ret=%d\n",
+				   name, i, array_size,
+				   regs[i].addr, regs[i].data, ret);
+			return ret;
+		}
+
+		/* Keep the A733 TWI controller from overrunning on long tables. */
+		usleep_range(100, 200);
+	}
+
+	sensor_print("%s complete: %d registers\n", name, array_size);
+	return 0;
+}
+
 static int sensor_reg_init(struct sensor_info *info)
 {
 	int ret;
@@ -1515,19 +1545,27 @@ static int sensor_reg_init(struct sensor_info *info)
 	struct sensor_win_size *wsize = info->current_wins;
 	/* struct sensor_exp_gain exp_gain; */
 
-	ret = sensor_write_array(sd, sensor_default_regs,
-				 ARRAY_SIZE(sensor_default_regs));
-	if (ret < 0) {
-		sensor_err("write sensor_default_regs error\n");
+	ret = imx477_write_array_debug(sd, sensor_default_regs,
+				       ARRAY_SIZE(sensor_default_regs),
+				       "sensor_default_regs");
+	if (ret < 0)
 		return ret;
-	}
 
 	sensor_dbg("sensor_reg_init\n");
 
-	sensor_write_array(sd, sensor_fmt->regs, sensor_fmt->regs_size);
+	ret = imx477_write_array_debug(sd, sensor_fmt->regs,
+				       sensor_fmt->regs_size,
+				       "sensor_fmt_regs");
+	if (ret < 0)
+		return ret;
 
-	if (wsize->regs)
-		sensor_write_array(sd, wsize->regs, wsize->regs_size);
+	if (wsize->regs) {
+		ret = imx477_write_array_debug(sd, wsize->regs,
+					       wsize->regs_size,
+					       "sensor_mode_regs");
+		if (ret < 0)
+			return ret;
+	}
 
 	if (wsize->set_size)
 		wsize->set_size(sd);

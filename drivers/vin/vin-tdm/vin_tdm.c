@@ -377,7 +377,9 @@ static int tdm_is_wdr_working(struct tdm_rx_dev *tdm_rx)
 static int tdm_set_rx_cfg(struct tdm_rx_dev *tdm_rx, unsigned int en)
 {
 	struct tdm_dev *tdm = container_of(tdm_rx, struct tdm_dev, tdm_rx[tdm_rx->id]);
+	struct mbus_framefmt_res *res = (void *)tdm_rx->format.reserved;
 	u32 size = 0, tatol;
+	u32 requested_width = tdm_rx->format.width;
 	u16 rx_pkg_line_words = 0;
 	int ret, i;
 	unsigned int tdm_buf_num;
@@ -493,6 +495,22 @@ static int tdm_set_rx_cfg(struct tdm_rx_dev *tdm_rx, unsigned int en)
 				size = ALIGN(tdm_rx->width * tdm_rx->tdm_fmt->input_bit_width, 512) * tdm_rx->height / 8 + ALIGN(tdm_rx->height, 64);
 			else if (tdm_rx->ws.lbc_en)
 				size = ALIGN(rx_pkg_line_words, 8) * tdm_rx->height * 4 + ALIGN(tdm_rx->height, 64);
+			vin_print("TDM-RUNTIME-DIAG tdm=%u work_mode=%u rx=%u large_image=%u pix_fmt=%#x wdr=%u req=%ux%u programmed=%ux%u code=%#x input_type=%u input_bits=%u raw_fmt=%u fps=%u vts=%u isp_clk=%u speed_dn=%u pkg=%u lbc=%u sync=%u tx_func=%u rx_fifo_data=%u rx_fifo_head=%u bufs=%u buf_size=%u pkg_line_words=%u tx_fifo_mode=%u tx_fifo_data=%u tx_fifo_head=%u tx_valid=%u tx_invalid=%u\n",
+				tdm->id, tdm->work_mode, tdm_rx->id,
+				tdm_rx->large_image, res->res_pix_fmt, res->res_wdr_mode,
+				requested_width, tdm_rx->format.height,
+				tdm_rx->width, tdm_rx->height, tdm_rx->format.code,
+				tdm_rx->tdm_fmt->input_type,
+				tdm_rx->tdm_fmt->input_bit_width,
+				tdm_rx->tdm_fmt->raw_fmt, tdm_rx->sensor_fps,
+				tdm_rx->vts, tdm_rx->isp_clk, tdm->ws.speed_dn_en,
+				tdm_rx->ws.pkg_en, tdm_rx->ws.lbc_en,
+				tdm_rx->ws.sync_en, tdm_rx->ws.tx_func_en,
+				tdm_rx->ws.data_fifo_depth,
+				tdm_rx->ws.head_fifo_depth, tdm_buf_num, size,
+				rx_pkg_line_words, tdm->tx_cfg.fifo_mode,
+				tdm->tx_cfg.data_depth, tdm->tx_cfg.head_depth,
+				tdm->tx_cfg.valid_num, tdm->tx_cfg.invalid_num);
 			ret = tdm_rx_bufs_alloc(tdm_rx, size, tdm_buf_num);
 			if (ret)
 				return ret;
