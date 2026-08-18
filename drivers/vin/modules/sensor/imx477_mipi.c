@@ -1471,9 +1471,9 @@ static struct sensor_win_size sensor_win_sizes[] = {
 	 .set_size = NULL,
 	},
 	{
-	 .width = 4056,
+	 .width = 4032,
 	 .height = 3040,
-	 .hoffset = 0,
+	 .hoffset = 12,
 	 .voffset = 0,
 	 .hts = 7700,
 	 .vts = 3640,
