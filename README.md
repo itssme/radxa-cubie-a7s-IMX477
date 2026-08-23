@@ -188,3 +188,16 @@ b75284693ebd905851adb8ad87f03fdcce52b0cc0232b60e52e35888c3a09277  imx477_mipi.ko
 
 The modules are not committed because they are kernel-version-specific and can
 be reproduced from source.
+
+## 1080p tone-mix reference capture
+
+The repository also includes a visually realistic processed 1080p reference
+capture in [`examples/imx477-1080p-tone-mix-20260824/`](examples/imx477-1080p-tone-mix-20260824/).
+It was captured from `/dev/video0` at 1920×1080 with the tone-mix profile,
+`force_exp_16line=122880`, and `force_gain_16=16`.
+
+The original frame is [`exp122880.jpg`](examples/imx477-1080p-tone-mix-20260824/exp122880.jpg).
+The corresponding debug/evaluation overlay, using automatic ArUco marker
+detection, is [`exp122880-debug.jpg`](examples/imx477-1080p-tone-mix-20260824/exp122880-debug.jpg).
+The machine-readable evaluator output is
+[`exp122880-eval.json`](examples/imx477-1080p-tone-mix-20260824/exp122880-eval.json).
