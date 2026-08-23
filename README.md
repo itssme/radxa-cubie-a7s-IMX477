@@ -196,8 +196,14 @@ capture in [`examples/imx477-1080p-tone-mix-20260824/`](examples/imx477-1080p-to
 It was captured from `/dev/video0` at 1920×1080 with the tone-mix profile,
 `force_exp_16line=122880`, and `force_gain_16=16`.
 
-The original frame is [`exp122880.jpg`](examples/imx477-1080p-tone-mix-20260824/exp122880.jpg).
+The original frame:
+
+![IMX477 1080p tone-mix reference](examples/imx477-1080p-tone-mix-20260824/exp122880.jpg)
+
 The corresponding debug/evaluation overlay, using automatic ArUco marker
-detection, is [`exp122880-debug.jpg`](examples/imx477-1080p-tone-mix-20260824/exp122880-debug.jpg).
+detection:
+
+![IMX477 1080p automatic-ArUco evaluation](examples/imx477-1080p-tone-mix-20260824/exp122880-debug.jpg)
+
 The machine-readable evaluator output is
 [`exp122880-eval.json`](examples/imx477-1080p-tone-mix-20260824/exp122880-eval.json).
