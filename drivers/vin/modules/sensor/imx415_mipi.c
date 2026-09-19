@@ -515,26 +515,27 @@ static struct regval_list sensor_10bit_30fps_regs[] = {
 static struct regval_list sensor_10bit_1080p_regs[] = {
 	{0x3000, 0x01},/* stanby */
 	{0x3001, 0x00},
-	{0x3008, 0x7F},
-	{0x300A, 0x5B},
+	{0x3008, 0x5D},
+	{0x300A, 0x42},
 	{0x3020, 0x01},
 	{0x3021, 0x01},
 	{0x3022, 0x01},
-	{0x3024, 0xCA},
+	{0x3024, 0xCE},
 	{0x3025, 0x08},
-	{0x3028, 0x26},
-	{0x3029, 0x02},
+	{0x3028, 0x6E},
+	{0x3029, 0x01},
 	{0x3031, 0x00},
 	{0x3032, 0x00},
-	{0x3033, 0x04},
+	{0x3033, 0x08},
 	{0x3050, 0x08},
 	{0x30C1, 0x00},
 	{0x30D9, 0x02},
 	{0x30DA, 0x01},
-	{0x3116, 0x24},
-	{0x3118, 0xC0},
-	{0x311A, 0xE0},
-	{0x311E, 0x24},
+	{0x3116, 0x23},
+	{0x3118, 0xA5},
+	{0x3119, 0x00},
+	{0x311A, 0xE7},
+	{0x311E, 0x23},
 	{0x32D4, 0x21},
 	{0x32EC, 0xA1},
 	{0x344C, 0x2B},
@@ -635,20 +636,20 @@ static struct regval_list sensor_10bit_1080p_regs[] = {
 	{0x3BC4, 0xA2},
 	{0x3BC8, 0xBD},
 	{0x3BCA, 0xBD},
-	{0x4004, 0x48},
-	{0x4005, 0x09},
-	{0x400C, 0x00},
-	{0x4018, 0x7F},
-	{0x401A, 0x37},
-	{0x401C, 0x37},
-	{0x401E, 0xF7},
-	{0x401F, 0x00},
-	{0x4020, 0x3F},
-	{0x4022, 0x6F},
-	{0x4024, 0x3F},
-	{0x4026, 0x5F},
-	{0x4028, 0x2F},
-	{0x4074, 0x01},
+	{0x4004, 0xC0},
+	{0x4005, 0x06},
+	{0x400C, 0x01},
+	{0x4018, 0xA7},
+	{0x401A, 0x57},
+	{0x401C, 0x5F},
+	{0x401E, 0x97},
+	{0x401F, 0x01},
+	{0x4020, 0x5F},
+	{0x4022, 0xAF},
+	{0x4024, 0x5F},
+	{0x4026, 0x9F},
+	{0x4028, 0x4F},
+	{0x4074, 0x00},
 	{0x3000, 0x00}, /* operation */
 	{0x3002, 0x00},
 };
@@ -1098,11 +1099,56 @@ static int sensor_g_exp(struct v4l2_subdev *sd, __s32 *value)
 	return 0;
 }
 static int imx415_mipi_sensor_vts;
+
+/*
+ * Optional forced exposure for the 1080p90 mode.
+ *
+ * Units are 1/16 of one sensor line.
+ * At HMAX=366 / ~74.25 MHz:
+ *
+ *   3232  ~= 1 ms
+ *   6464  ~= 2 ms
+ *   12928 ~= 4 ms
+ *
+ * 0 leaves exposure unrestricted.
+ */
+/*
+ * Build-time default exposure.
+ *
+ * Override while building with:
+ *
+ *   -DIMX415_FORCE_EXP_16LINE_DEFAULT=3232
+ *
+ * Examples:
+ *     0 = normal/unrestricted
+ *  3232 = ~1 ms
+ *  6464 = ~2 ms
+ * 12928 = ~4 ms
+ * 19392 = ~6 ms
+ */
+#ifndef IMX415_FORCE_EXP_16LINE_DEFAULT
+#define IMX415_FORCE_EXP_16LINE_DEFAULT 0
+#endif
+
+static unsigned int force_exp_16line =
+	IMX415_FORCE_EXP_16LINE_DEFAULT;
+
+module_param(force_exp_16line, uint, 0644);
+MODULE_PARM_DESC(force_exp_16line,
+	"Force exposure in 1/16-line units; 0=unrestricted");
+
 static int sensor_s_exp(struct v4l2_subdev *sd, unsigned int exp_val)
 {
 	data_type explow, exphigh, expmid;
 	int exptime;
 	struct sensor_info *info = to_state(sd);
+
+	if (force_exp_16line && imx415_mipi_sensor_vts > 4) {
+		exp_val = force_exp_16line;
+
+		if ((exp_val >> 4) > imx415_mipi_sensor_vts - 4)
+			exp_val = (imx415_mipi_sensor_vts - 4) << 4;
+	}
 	if (exp_val) {
 		exptime = imx415_mipi_sensor_vts - (exp_val >> 4);
 		exphigh = (unsigned char)((0x00f0000 & exptime) >> 16);
@@ -1370,7 +1416,7 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
 	info->gain = 0;
 
 	info->tpf.numerator = 1;
-	info->tpf.denominator = 30;	/* 30fps */
+	info->tpf.denominator = 90;	/* 60fps test */
 
 	return 0;
 }
@@ -1425,7 +1471,7 @@ static struct sensor_format_struct sensor_formats[] = {
 		.bpp = 1
 	},
 };
-#define N_FMTS ARRAY_SIZE(sensor_formats)
+#define N_FMTS 1 /* RAW10 891-Mbps diagnostic */
 
 /*
  * Then there is the issue of window sizes.  Try to capture the info here.
@@ -1473,19 +1519,19 @@ static struct sensor_win_size sensor_win_sizes[] = {
 	 .set_size = NULL,
 	 },
 #endif
-	{  /* 1920*1080 30fps 10bit */
+	{  /* 1920*1080 90fps RAW10 - 1485Mbps / 27MHz */
 	 .width = 1920,
 	 .height = 1080,
 	 .hoffset = 0,
 	 .voffset = 0,
-	 .hts = 1066,
-	 .vts = 2251,
-	 .pclk = 72 * 1000 * 1000,
-	 .mipi_bps = 720 * 1000 * 1000,
-	 .fps_fixed = 30,
+	 .hts = 366,
+	 .vts = 2254,
+	 .pclk = 74 * 1000 * 1000,
+	 .mipi_bps = 1485 * 1000 * 1000,
+	 .fps_fixed = 90,
 	 .bin_factor = 1,
 	 .intg_min = 8 << 4,
-	 .intg_max = (2251 - 4) << 4,
+	 .intg_max = (2254 - 4) << 4,
 	 .gain_min = 1<<4,
 	 .gain_max = 5631<<4,
 	 .regs = sensor_10bit_1080p_regs,
@@ -1797,6 +1843,8 @@ static int sensor_probe(struct i2c_client *client,
 	info->sensor_field = V4L2_FIELD_NONE;
 	info->stream_seq = MIPI_BEFORE_SENSOR;
 	info->combo_mode = CMB_TERMINAL_RES | CMB_PHYA_OFFSET2 | MIPI_NORMAL_MODE;
+	info->time_hs = 0x20;
+	info->deskew = 0x02;
 	info->af_first_flag = 1;
 	info->exp = 0;
 	info->gain = 0;
