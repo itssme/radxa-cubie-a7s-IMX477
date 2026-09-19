@@ -107,12 +107,17 @@ static void vin_md_prepare_pipeline(struct vin_pipeline *p,
 				break;
 		}
 
-		if (pad == NULL)
+		if (pad == NULL) {
+			pr_info("vinwalk: stop at %s (no remote source pad)\n",
+				me->name);
 			break;
+		}
 
 		sd = media_entity_to_v4l2_subdev(pad->entity);
 		vin_log(VIN_LOG_MD, "%s entity is %s, group id is 0x%x\n",
 			__func__, pad->entity->name, sd->grp_id);
+		pr_info("vinwalk: hop %s grp 0x%x\n", pad->entity->name,
+			sd->grp_id);
 
 		switch (sd->grp_id) {
 		case VIN_GRP_ID_SENSOR:
@@ -143,6 +148,17 @@ static void vin_md_prepare_pipeline(struct vin_pipeline *p,
 		if (me->num_pads == 1)
 			break;
 	}
+}
+
+/*
+ * Re-walk a video node's pipeline against the *current* media-graph link
+ * states. vin_setup_default_links() runs once at probe time, before the
+ * sensor->mipi and csi->tdm links are enabled, which can leave
+ * pipe.sd[VIN_IND_SENSOR] NULL forever. Callers re-resolve it lazily.
+ */
+void vin_pipeline_reprepare(struct vin_core *vinc)
+{
+	vin_md_prepare_pipeline(&vinc->vid_cap.pipe, &vinc->vid_cap.vdev.entity);
 }
 
 static int vin_mclk_pin_release(struct vin_md *vind)
@@ -1421,6 +1437,7 @@ static int __vin_pipeline_s_stream(struct vin_pipeline *p, int on_idx)
 
 	if (WARN_ON(p->sd[VIN_IND_SENSOR] == NULL))
 		return -ENODEV;
+	pr_info("vinwalk: pipeline_s_stream on_idx=%d\n", on_idx);
 
 	vind = entity_to_vin_mdev(&p->sd[VIN_IND_SENSOR]->entity);
 	if (vind == NULL) {
@@ -1494,11 +1511,14 @@ static int __vin_pipeline_s_stream(struct vin_pipeline *p, int on_idx)
 		unsigned int idx = seq[on_idx][i];
 		if (skip_sensor && idx == VIN_IND_SENSOR)
 			continue;
-		if (!p->sd[idx] || !p->sd[idx]->entity.graph_obj.mdev)
+		if (!p->sd[idx] || !p->sd[idx]->entity.graph_obj.mdev) {
+			pr_info("vinwalk: s_stream skip null idx %d\n", idx);
 			continue;
+		}
 		if (vinc->ptn_cfg.ptn_en && (idx <= VIN_IND_MIPI))
 			continue;
 		ret = __vin_subdev_set_stream(p->sd[idx], idx, on);
+		pr_info("vinwalk: set_stream idx %d ret %d\n", idx, ret);
 		if (ret < 0 && ret != -ENODEV) {
 			vin_err("%s error!\n", __func__);
 			goto error;
@@ -2279,6 +2299,10 @@ static int vin_setup_default_links(struct vin_md *vind)
 
 		p = &vinc->vid_cap.pipe;
 		vin_md_prepare_pipeline(p, &vinc->vid_cap.vdev.entity);
+		pr_info("vinwalk: vinc%d id=%d sensor=%p mipi=%p csi=%p tdm=%p isp=%p scaler=%p\n",
+			i, vinc->id, p->sd[VIN_IND_SENSOR], p->sd[VIN_IND_MIPI],
+			p->sd[VIN_IND_CSI], p->sd[VIN_IND_TDM_RX],
+			p->sd[VIN_IND_ISP], p->sd[VIN_IND_SCALER]);
 	}
 
 	return ret;

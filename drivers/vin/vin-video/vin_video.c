@@ -805,6 +805,8 @@ static int vidioc_g_fmt_vid_cap_mplane(struct file *file, void *priv,
 	return 0;
 }
 
+extern void vin_pipeline_reprepare(struct vin_core *vinc);
+
 static int vin_pipeline_try_format(struct vin_core *vinc,
 				    struct v4l2_mbus_framefmt *tfmt,
 				    struct vin_fmt **fmt_id,
@@ -818,6 +820,20 @@ static int vin_pipeline_try_format(struct vin_core *vinc,
 	struct media_graph graph;
 	int ret, i = 0, sd_ind;
 	int ch_id;
+
+	/*
+	 * The boot-time pipeline walk can miss the sensor if the
+	 * sensor->mipi / csi->tdm links were still disabled then.
+	 * Retry once against the live graph before giving up.
+	 */
+	sd = vinc->vid_cap.pipe.sd[VIN_IND_SENSOR];
+	if (!sd) {
+		vin_pipeline_reprepare(vinc);
+		sd = vinc->vid_cap.pipe.sd[VIN_IND_SENSOR];
+		if (sd)
+			pr_info("vinwalk: lazy re-prepare found sensor for video%d\n",
+				vinc->id);
+	}
 
 	if (WARN_ON(!sd || !tfmt || !fmt_id))
 		return -EINVAL;
@@ -3721,6 +3737,14 @@ static int vin_open(struct file *file)
 
 	vinc_status_rpmsg_send(ARM_VIN_START, &vinc->rpmsg);
 #endif
+
+	/* Sensor may have been missed by the probe-time walk while graph
+	 * links were still disabled; re-resolve before power management. */
+	if (!cap->pipe.sd[VIN_IND_SENSOR]) {
+		vin_pipeline_reprepare(vinc);
+		if (cap->pipe.sd[VIN_IND_SENSOR])
+			pr_info("vinwalk: lazy re-prepare at open found sensor\n");
+	}
 
 	mutex_lock(&cap->vdev.entity.graph_obj.mdev->graph_mutex);
 	set_bit(VIN_LPM, &cap->state);

@@ -1988,7 +1988,9 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 static struct sensor_format_struct sensor_formats[] = {
 	{
 		.desc = "Raw RGB Bayer",
-		.mbus_code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		/* Pi v2-style modules stream the 12MP mode as RAW12
+		 * (MIPI DT 0x2C); matches raspberrypi mode_4056x3040. */
+		.mbus_code = MEDIA_BUS_FMT_SRGGB12_1X12,
 		.regs = sensor_fmt_raw,
 		.regs_size = ARRAY_SIZE(sensor_fmt_raw),
 		.bpp = 1
