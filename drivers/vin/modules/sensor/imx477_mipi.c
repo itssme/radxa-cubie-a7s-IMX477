@@ -31,6 +31,27 @@ MODULE_AUTHOR("lwj");
 MODULE_DESCRIPTION("A low-level driver for IMX477 sensors");
 MODULE_LICENSE("GPL");
 
+/*
+ * Optional deterministic controls for RAW characterization.  A zero value
+ * leaves the normal VIN/AWISP control path unchanged.  Non-zero values use
+ * the same units as the existing sensor callbacks: exposure is in 1/16
+ * sensor-line units and gain is the driver's 16-based gain value (16 ~= 1x).
+ */
+static unsigned int force_exp_16line;
+static unsigned int force_gain_16;
+
+module_param(force_exp_16line, uint, 0644);
+MODULE_PARM_DESC(force_exp_16line,
+	"Force exposure in existing 1/16-line units; 0=unrestricted");
+
+module_param(force_gain_16, uint, 0644);
+MODULE_PARM_DESC(force_gain_16,
+	"Force gain in existing 16-based units; 0=unrestricted");
+
+#define IMX477_EXP_MAX      0xfffff
+#define IMX477_GAIN_MIN     (1 * 16)
+#define IMX477_GAIN_MAX     (352 * 16 - 1)
+
 #define MCLK              (24*1000*1000)
 #define V4L2_IDENT_SENSOR 0x0477
 
@@ -243,6 +264,14 @@ static struct regval_list sensor_full_regs[] = {
 	{0x0343, 0x14},
 	{0x0340, 0x0E},
 	{0x0341, 0x38},
+	/* 4K calibration default: 1024 lines (16384 in forced 1/16-line units), 1x gain. */
+	{0x0202, 0x04},
+	{0x0203, 0x00},
+	{0x0204, 0x00},
+	{0x0205, 0x00},
+	{0x3FF9, 0x01},
+	{0x020E, 0x01},
+	{0x020F, 0x00},
 	{0x0344, 0x00},
 	{0x0345, 0x00},
 	{0x0346, 0x00},
@@ -1124,8 +1153,28 @@ static int sensor_g_exp(struct v4l2_subdev *sd, __s32 *value)
 	return 0;
 }
 
-/* static int imx477_sensor_vts; */
-static int sensor_s_exp(struct v4l2_subdev *sd, unsigned int exp_val)
+static unsigned int sensor_effective_exp(unsigned int exp_val)
+{
+	if (force_exp_16line)
+		exp_val = force_exp_16line;
+	if (exp_val > IMX477_EXP_MAX)
+		exp_val = IMX477_EXP_MAX;
+	return exp_val;
+}
+
+static int sensor_effective_gain(int gain_val)
+{
+	if (force_gain_16)
+		gain_val = force_gain_16;
+	if (gain_val < IMX477_GAIN_MIN)
+		gain_val = IMX477_GAIN_MIN;
+	if (gain_val > IMX477_GAIN_MAX)
+		gain_val = IMX477_GAIN_MAX;
+	return gain_val;
+}
+
+/* These helpers program already validated values without reapplying overrides. */
+static int sensor_program_exp(struct v4l2_subdev *sd, unsigned int exp_val)
 {
 	data_type explow, exphigh;
 	struct sensor_info *info = to_state(sd);
@@ -1143,6 +1192,11 @@ static int sensor_s_exp(struct v4l2_subdev *sd, unsigned int exp_val)
 	return 0;
 }
 
+static int sensor_s_exp(struct v4l2_subdev *sd, unsigned int exp_val)
+{
+	return sensor_program_exp(sd, sensor_effective_exp(exp_val));
+}
+
 static int sensor_g_gain(struct v4l2_subdev *sd, __s32 *value)
 {
 	struct sensor_info *info = to_state(sd);
@@ -1151,7 +1205,7 @@ static int sensor_g_gain(struct v4l2_subdev *sd, __s32 *value)
 	return 0;
 }
 
-static int sensor_s_gain(struct v4l2_subdev *sd, int gain_val)
+static int sensor_program_gain(struct v4l2_subdev *sd, int gain_val)
 {
 	struct sensor_info *info = to_state(sd);
 	data_type gainlow = 0;
@@ -1186,6 +1240,11 @@ static int sensor_s_gain(struct v4l2_subdev *sd, int gain_val)
 	return 0;
 }
 
+static int sensor_s_gain(struct v4l2_subdev *sd, int gain_val)
+{
+	return sensor_program_gain(sd, sensor_effective_gain(gain_val));
+}
+
 static int imx477_mipi_sensor_vts;
 static int sensor_s_exp_gain(struct v4l2_subdev *sd,
 			     struct sensor_exp_gain *exp_gain)
@@ -1203,16 +1262,8 @@ static int sensor_s_exp_gain(struct v4l2_subdev *sd,
 	if (info->large_image == 3)
 		return 0;
 
-	exp_val = exp_gain->exp_val;
-	gain_val = exp_gain->gain_val;
-
-	if (gain_val < 1*16)
-		gain_val = 16;
-	if (gain_val > 352*16 - 1)
-		gain_val = 352*16 - 1;
-
-	if (exp_val > 0xfffff)
-		exp_val = 0xfffff;
+	exp_val = sensor_effective_exp(exp_gain->exp_val);
+	gain_val = sensor_effective_gain(exp_gain->gain_val);
 
 	shutter = exp_val / 16;
 	if (shutter > imx477_mipi_sensor_vts - 4)
@@ -1223,8 +1274,8 @@ static int sensor_s_exp_gain(struct v4l2_subdev *sd,
 	sensor_write(sd, 0x0341, (frame_length & 0xff));
 	sensor_write(sd, 0x0340, (frame_length >> 8));
 
-	sensor_s_exp(sd, exp_val);
-	sensor_s_gain(sd, gain_val);
+	sensor_program_exp(sd, exp_val);
+	sensor_program_gain(sd, gain_val);
 
 	sensor_dbg("sensor_set_gain exp = %d, %d Done!\n", gain_val, exp_val);
 
@@ -1599,6 +1650,41 @@ static int sensor_reg_init(struct sensor_info *info)
 	info->width = wsize->width;
 	info->height = wsize->height;
 	imx477_mipi_sensor_vts = wsize->vts;
+
+	sensor_print("IMX477 init: large_image=%d force_exp=%u force_gain=%u "
+		      "mode=%ux%u vts=%d\n", info->large_image,
+		      force_exp_16line, force_gain_16, info->width, info->height,
+		      imx477_mipi_sensor_vts);
+	/*
+	 * Initialization happens while the sensor is still in standby, so the
+	 * forced values can also be programmed for the two-ISP large-image mode.
+	 * The runtime sensor_s_exp_gain() large-image guard remains unchanged.
+	 */
+	if (force_exp_16line || force_gain_16) {
+		unsigned int exp_val = 0;
+		int gain_val = 0;
+		int shutter = 0;
+		int frame_length = imx477_mipi_sensor_vts;
+
+		if (force_exp_16line) {
+			exp_val = sensor_effective_exp(force_exp_16line);
+			shutter = exp_val / 16;
+			if (shutter > imx477_mipi_sensor_vts - 4)
+				frame_length = shutter + 4;
+			sensor_write(sd, 0x0341, (frame_length & 0xff));
+			sensor_write(sd, 0x0340, (frame_length >> 8));
+			sensor_program_exp(sd, exp_val);
+		}
+
+		if (force_gain_16) {
+			gain_val = sensor_effective_gain(force_gain_16);
+			sensor_program_gain(sd, gain_val);
+		}
+
+		sensor_print("IMX477 forced init: exp=%u gain=%d frame_length=%d\n",
+			      exp_val, gain_val, frame_length);
+		usleep_range(5000, 5100);
+	}
 
 	/* exp_gain.exp_val = 12480; */
 	/* exp_gain.gain_val = 48; */

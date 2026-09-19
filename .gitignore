@@ -18,3 +18,20 @@ scripts/imx477/libisp_no3dn.so
 .vscode*
 sunxi-autogen.h
 *built-in.a*
+
+# IMX477 ISP calibration workspace: keep scripts/small artifacts, drop capture data
+work/*
+!work/README.md
+!work/*.py
+!work/*.json
+!work/*.cfg
+!work/*.bin
+!work/isp_eval_toolkit/
+work/isp_eval_toolkit/*
+!work/isp_eval_toolkit/*.py
+!work/isp_eval_toolkit/*.json
+!work/isp_eval_toolkit/*.md
+!work/isp_eval_toolkit/*.txt
+!work/isp_eval_toolkit/*.lock
+!work/isp_eval_toolkit/*.pdf
+!work/isp_eval_toolkit/.python-version
