@@ -207,3 +207,22 @@ detection:
 
 The machine-readable evaluator output is
 [`exp122880-eval.json`](examples/imx477-1080p-tone-mix-20260824/exp122880-eval.json).
+
+## Device snapshot as of 2026-09-19 cleanup
+
+The Cubie A7S this repository was developed on runs kernel
+`5.15.147-21-a733` with the following state installed (reproducible from
+this branch via `scripts/imx477/install.sh` plus the Arducam overlay):
+
+```text
+7d8dafb9db61d115fb076e8831aceda90838626510c37bfea3986ba3fb222c91  /lib/modules/5.15.147-21-a733/extra/imx477_mipi.ko
+8fd7f7afdc7481ba34103f407b97286c94818bfa99b2d070034aec04c5848d03  vin_v4l2.ko (uncompressed, matches tested reference above)
+3047294de7fa7be12225325f680618a08490e921f82f04bacbe8e240f3f3dc87  /usr/local/lib/libisp_no3dn.so
+391852c8abc6251b960b1974ae05f009e97a6fc5a24f2619968c640081734709  /boot/dtbo/cubie-a7a-arducam-imx477.dtbo
+```
+
+The loaded `imx477_mipi` module exposes `force_exp_16line`/`force_gain_16`,
+i.e. it is built from the committed source at this branch's HEAD. Pre-port
+snapshots of the stock VIN stack are kept on the device in
+`~/camera-backups/`. ISP tuning assets live under `work/` (scripts tracked,
+capture datasets gitignored).
