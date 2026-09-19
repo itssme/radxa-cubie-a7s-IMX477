@@ -1736,6 +1736,14 @@ static int sensor_s_sw_stby(struct v4l2_subdev *sd, int on_off)
 /*
  * Stuff that knows about the sensor.
  */
+/*
+ * Power-sequencing found by sensor_probe_power_scan(); defaults reproduce
+ * the classic sequence (PWDN released high, MCLK on, short settle).
+ */
+static int pwq_pwdn_high = 1;
+static int pwq_mclk_on = 1;
+static int pwq_long_dly;
+
 static int sensor_power(struct v4l2_subdev *sd, int on)
 {
 	int ret = 0;
@@ -1774,10 +1782,13 @@ static int sensor_power(struct v4l2_subdev *sd, int on)
 
 		usleep_range(10000, 12000);
 		vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
-		vin_gpio_write(sd, PWDN, CSI_GPIO_HIGH);
-		usleep_range(7000, 8000);
+		vin_gpio_write(sd, PWDN,
+			       pwq_pwdn_high ? CSI_GPIO_HIGH : CSI_GPIO_LOW);
+		usleep_range(pwq_long_dly ? 60000 : 7000,
+			     (pwq_long_dly ? 60000 : 7000) + 1000);
 		vin_set_mclk_freq(sd, MCLK);
-		vin_set_mclk(sd, ON);
+		if (pwq_mclk_on)
+			vin_set_mclk(sd, ON);
 		usleep_range(10000, 12000);
 		cci_unlock(sd);
 		break;
@@ -1857,6 +1868,58 @@ static int sensor_detect(struct v4l2_subdev *sd)
 	return 0;
 }
 
+/*
+ * Some IMX477 carrier modules (e.g. Pi v2-style 15-pin boards) come up
+ * differently from the Arducam 4-lane part: probe PWDN level, MCLK and
+ * settle time combos until the chip ID answers, then lock the winner in
+ * via the pwq_* globals so sensor_power(ON) reproduces it.
+ */
+static int sensor_probe_power_scan(struct v4l2_subdev *sd)
+{
+	static const struct {
+		u8 pwdn_high, mclk_on, long_dly;
+	} combos[] = {
+		{ 1, 1, 0 }, { 1, 1, 1 }, { 0, 1, 1 }, { 0, 1, 0 },
+		{ 1, 0, 0 }, { 0, 0, 1 }, { 1, 0, 1 }, { 0, 0, 0 },
+	};
+	data_type msb = 0, lsb = 0;
+	unsigned int i;
+	int ret;
+
+	for (i = 0; i < ARRAY_SIZE(combos); i++) {
+		u8 pwdn = combos[i].pwdn_high ? CSI_GPIO_HIGH : CSI_GPIO_LOW;
+		u32 dly = combos[i].long_dly ? 60000 : 10000;
+
+		vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
+		vin_gpio_write(sd, PWDN, pwdn);
+		vin_set_mclk(sd, OFF);
+		usleep_range(20000, 21000);
+		vin_set_mclk_freq(sd, MCLK);
+		if (combos[i].mclk_on)
+			vin_set_mclk(sd, ON);
+		vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
+		usleep_range(dly, dly + 1000);
+		vin_gpio_write(sd, PWDN, pwdn);
+		usleep_range(dly, dly + 1000);
+
+		ret = sensor_read(sd, 0x0016, &msb);
+		if (!ret)
+			ret = sensor_read(sd, 0x0017, &lsb);
+		sensor_print("power-scan[%u] pwdn=%d mclk=%d dly=%ums -> %s id=0x%02x%02x\n",
+			     i, combos[i].pwdn_high, combos[i].mclk_on,
+			     dly / 1000, ret ? "FAIL" : "OK", msb, lsb);
+		if (!ret && msb == 0x04 && lsb == 0x77) {
+			pwq_pwdn_high = combos[i].pwdn_high;
+			pwq_mclk_on = combos[i].mclk_on;
+			pwq_long_dly = combos[i].long_dly;
+			sensor_print("power-scan: locked combo %u\n", i);
+			return 0;
+		}
+	}
+
+	return -ENODEV;
+}
+
 static int sensor_init(struct v4l2_subdev *sd, u32 val)
 {
 	int ret;
@@ -1867,8 +1930,11 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
 	/* Make sure it is a target sensor */
 	ret = sensor_detect(sd);
 	if (ret) {
-		sensor_err("chip found is not an target chip.\n");
-		return ret;
+		if (sensor_probe_power_scan(sd)) {
+			sensor_err("chip found is not an target chip.\n");
+			return -ENODEV;
+		}
+		sensor_print("power-scan recovered target chip.\n");
 	}
 
 	info->focus_status = 0;
